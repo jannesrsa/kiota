@@ -43,4 +43,7 @@ public class DiscriminatorInformation : ICloneable {
             discriminatorMappings = discriminatorMappings == null ? null : new (discriminatorMappings)
         };
     }
+    public bool ShouldWriteDiscriminatorSwitch { get {
+        return !string.IsNullOrEmpty(DiscriminatorPropertyName) && DiscriminatorMappings.Any();
+    } }
 }
