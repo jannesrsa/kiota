@@ -575,6 +575,8 @@ public class KiotaBuilder
         var typeNames = new List<string>{typeSchema?.Items?.Type, childType, typeSchema?.Type};
         if(typeSchema?.AnyOf?.Any() ?? false)
             typeNames.AddRange(typeSchema.AnyOf.Select(x => x.Type)); // double is sometimes an anyof string, number and enum
+        if(typeSchema?.OneOf?.Any() ?? false)
+            typeNames.AddRange(typeSchema.OneOf.Select(x => x.Type)); // double is sometimes an oneof string, number and enum
         // first value that's not null, and not "object" for primitive collections, the items type matters
         var typeName = typeNames.FirstOrDefault(x => !string.IsNullOrEmpty(x) && !typeNamesToSkip.Contains(x));
         
@@ -868,10 +870,10 @@ public class KiotaBuilder
     private CodeTypeBase CreateComposedModelDeclaration(OpenApiUrlTreeNode currentNode, OpenApiSchema schema, OpenApiOperation operation, string suffixForInlineSchema, CodeNamespace codeNamespace) {
         var typeName = currentNode.GetClassName(config.StructuredMimeTypes, operation: operation, suffix: suffixForInlineSchema, schema: schema).CleanupSymbolName();
         var (unionType, schemas) = (schema.IsOneOf(), schema.IsAnyOf()) switch {
-            (true, false) => (new CodeExclusionType {
+            (true, false) => (new CodeUnionType {
                 Name = typeName,
             } as CodeComposedTypeBase, schema.OneOf),
-            (false, true) => (new CodeUnionType {
+            (false, true) => (new CodeIntersectionType {
                 Name = typeName,
             }, schema.AnyOf),
             (_, _) => throw new InvalidOperationException("Schema is not oneOf nor anyOf"),
@@ -1042,7 +1044,7 @@ public class KiotaBuilder
                 .Select(x => KeyValuePair.Create(x.Key, GetCodeTypeForMapping(currentNode, x.Value, currentNamespace, baseClass, schema)))
                 .Where(static x => x.Value != null);
     }
-    public static CodeMethod AddDiscriminatorMethod(CodeClass newClass, string discriminatorPropertyName, IEnumerable<KeyValuePair<string, CodeTypeBase>> discriminatorMappings) {
+    public static void AddDiscriminatorMethod(CodeClass newClass, string discriminatorPropertyName, IEnumerable<KeyValuePair<string, CodeTypeBase>> discriminatorMappings) {
         var factoryMethod = newClass.AddMethod(new CodeMethod {
             Name = "CreateFromDiscriminatorValue",
             Description = "Creates a new instance of the appropriate class based on discriminator value",
@@ -1061,7 +1063,6 @@ public class KiotaBuilder
             Type = new CodeType { Name = ParseNodeInterface, IsExternal = true },
         });
         factoryMethod.DiscriminatorInformation.DiscriminatorPropertyName = discriminatorPropertyName;
-        return factoryMethod;
     }
     private CodeTypeBase GetCodeTypeForMapping(OpenApiUrlTreeNode currentNode, string referenceId, CodeNamespace currentNamespace, CodeClass baseClass, OpenApiSchema currentSchema) {
         var componentKey = referenceId.Replace("#/components/schemas/", string.Empty);
